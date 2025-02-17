@@ -1,0 +1,101 @@
+name: Message Composition Template
+description: Create a structured communication message
+
+title: "[MESSAGE] "
+labels: ["communication"]
+assignees: ["kazuki-tetsuya"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Message Composition Form
+        Please fill out all required fields below to compose your message.
+        
+        > [!TIP]
+        > - Maintain clarity and conciseness
+        > - Review message before submission
+
+  - type: input
+    id: cc
+    attributes:
+      label: CC Recipients
+      description: "Specify additional stakeholders to be notified (optional)"
+      placeholder: "@username1, @username2"
+    validations:
+      required: false
+
+  - type: input
+    id: subject
+    attributes:
+      label: Subject
+      description: "Provide a concise subject line (maximum 50 characters)"
+      placeholder: "[%Y-%m-%d] Meeting Notes"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority Classification
+      description: "Specify the message urgency level"
+      options:
+        - Normal (Standard operational communication)
+        - High (Requires prompt attention)
+        - Low (Informational purposes)
+        - Critical (Immediate response required)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Communication Category
+      description: "Select the primary communication purpose"
+      options:
+        - General Information
+        - Meeting/Event Coordination
+        - Project Status Update
+        - Action Request
+        - Follow-up Communication
+        - Technical Issue Report
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: content
+    attributes:
+      label: Message Body
+      description: "Compose your message following a structured format"
+      placeholder: "[Context] → [Core Message] → [Required Actions/Next Steps]"
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Attachments
+      description: "Document any supplementary files (optional)"
+      placeholder: |
+        1. [Filename] - File description
+        2. [Filename] - File description
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Validation Checklist
+      description: "Confirm the following items before submission"
+      options:
+        - label: Recipient information has been verified
+          required: true
+        - label: Content has been reviewed for clarity and accuracy
+          required: true
+        - label: Message has been screened for sensitive information
+          required: true
+        - label: All necessary attachments have been documented
+        - label: Message formatting meets requirements
+          required: true
