@@ -1,0 +1,130 @@
+name: Issue
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  check-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Check Issue Format
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {issue: {body, title, number}} = context.payload;
+            const validationState = {
+              isValid: true,
+              errors: new Set()
+            };
+
+            const addError = (error) => {
+              validationState.isValid = false;
+              validationState.errors.add(error);
+            };
+
+            const validateTitle = () => !title.startsWith('[MESSAGE] ') && 
+              addError('Title must start with [MESSAGE]. For example: "[MESSAGE] Your issue title here"');
+
+            const isValidDate = dateStr => /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/.test(dateStr) && 
+              !Number.isNaN(new Date(dateStr).getTime());
+
+            const extractSection = (section) => body.match(new RegExp(`${section}:(.*?)(?:\\n\\n|\\r\\n\\r\\n|$)`, 's'))?.[1]?.trim();
+
+            const validateCCRecipients = () => {
+              const ccContent = extractSection('CC Recipients');
+              if (!ccContent) return;
+              
+              const recipients = ccContent.split(',').map(r => r.trim());
+              if (recipients.some(r => !r.startsWith('@'))) {
+                addError('Each CC Recipient must start with @ symbol (e.g., @username1, @username2)');
+              }
+              if (recipients.length >= 2 && !ccContent.includes(',')) {
+                addError('Multiple CC Recipients must be separated by commas. For example: "@username1, @username2"');
+              }
+            };
+
+            const validateSubject = () => {
+              const subject = extractSection('Subject');
+              if (!subject) return;
+              
+              const dateMatch = subject.match(/^\[(\d{4}-\d{2}-\d{2})\]/);
+              if (!dateMatch) {
+                addError('Subject must start with a date in [YYYY-MM-DD] format. For example: "[2024-01-15] Your subject here"');
+              } else if (!isValidDate(dateMatch[1])) {
+                addError('The date in Subject must be a valid date in YYYY-MM-DD format. For example: "[2024-01-15]" not "[2024-13-45]"');
+              }
+            };
+
+            validateTitle();
+            validateCCRecipients();
+            validateSubject();
+
+            if (!validationState.isValid) {
+              const {owner, repo} = context.repo;
+              const repoParams = {owner, repo, issue_number: number};
+
+              await Promise.all([
+                github.rest.issues.addLabels({
+                  ...repoParams,
+                  labels: ['invalid']
+                }),
+                github.rest.issues.createComment({
+                  ...repoParams,
+                  body: `
+                  Your issue needs to be updated to follow our required format. Please address these formatting issues:
+                  
+                  ${[...validationState.errors].map(error => `- ${error}`).join('\n')}
+
+                  **Note**: This issue will be automatically closed in 5 minutes if the format is not corrected.
+                  `
+                })
+              ]);
+
+              setTimeout(async () => {
+                const {data: {body: currentBody, title: currentTitle}} = await github.rest.issues.get(repoParams);
+                
+                const revalidate = () => {
+                  if (!currentTitle.startsWith('[MESSAGE] ')) return false;
+
+                  const ccContent = extractSection('CC Recipients');
+                  if (ccContent) {
+                    const recipients = ccContent.split(',').map(r => r.trim());
+                    if (!recipients.every(r => r.startsWith('@'))) return false;
+                    if (recipients.length >= 2 && !ccContent.includes(',')) return false;
+                  }
+
+                  const subject = extractSection('Subject');
+                  if (subject) {
+                    const dateMatch = subject.match(/^\[(\d{4}-\d{2}-\d{2})\]/);
+                    if (!dateMatch || !isValidDate(dateMatch[1])) return false;
+                  }
+
+                  return true;
+                };
+
+                if (revalidate()) {
+                  await github.rest.issues.removeLabel({
+                    ...repoParams,
+                    name: 'invalid'
+                  });
+                  await github.rest.issues.createComment({
+                    ...repoParams,
+                    body: 'Thank you! Your issue now follows the correct format.'
+                  });
+                } else {
+                  await github.rest.issues.update({
+                    ...repoParams,
+                    state: 'closed',
+                    state_reason: 'not_planned'
+                  });
+                  await github.rest.issues.createComment({
+                    ...repoParams,
+                    body: 'Issue closed: The format requirements were not met within the 5-minute timeframe.'
+                  });
+                }
+              }, 5 * 60 * 1000);
+            }
